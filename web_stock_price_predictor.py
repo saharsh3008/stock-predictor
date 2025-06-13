@@ -109,13 +109,28 @@ period = n_years * 365
 # Cache stock data
 @st.cache_data
 def load_data(ticker):
-    data = yf.download(ticker, START, TODAY)
-    data.reset_index(inplace=True)
-    return data
+    try:
+        data = yf.download(ticker, START, TODAY, progress=False)
+        if data.empty:
+            raise ValueError(f"No data returned for ticker {ticker}.")
+        if not isinstance(data, pd.DataFrame):
+            raise ValueError("Unexpected data type returned from yfinance.")
+        data.reset_index(inplace=True)
+        required_columns = ['Date', 'Close']
+        if not all(col in data.columns for col in required_columns):
+            raise ValueError(f"Missing required columns: {required_columns}")
+        return data
+    except Exception as e:
+        st.error(f"Error loading data for {ticker}: {str(e)}")
+        st.stop()
 
 # Load and show data
 data_load_state = st.text('Loading data...')
-data = load_data(selected_stock)
+try:
+    data = load_data(selected_stock)
+except Exception:
+    data_load_state.text('Error loading data.')
+    st.stop()
 data_load_state.text('Loading data... done!')
 
 st.subheader('Raw data')
@@ -123,28 +138,43 @@ st.write(data.tail())
 
 # Plotting raw data
 def plot_raw_data():
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Stock Open"))
-    fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Stock Close"))
-    fig.layout.update(title_text='Time Series Data with Rangeslider', xaxis_rangeslider_visible=True)
-    st.plotly_chart(fig)
+    try:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Stock Open"))
+        fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="Stock Close"))
+        fig.layout.update(title_text='Time Series Data with Rangeslider', xaxis_rangeslider_visible=True)
+        st.plotly_chart(fig)
+    except Exception as e:
+        st.error(f"Error plotting raw data: {str(e)}")
+        st.stop()
 
 plot_raw_data()
 
-# ✅ Prepare data for Prophet with strict checks
-if 'Date' in data.columns and 'Close' in data.columns:
-    df_train = data[['Date', 'Close']].copy()
-    df_train.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
-    df_train['ds'] = pd.to_datetime(df_train['ds'], errors='coerce')
-    df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
-    df_train.dropna(inplace=True)
+# Prepare data for Prophet with strict checks
+try:
+    if 'Date' in data.columns and 'Close' in data.columns:
+        df_train = data[['Date', 'Close']].copy()
+        df_train.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
+        df_train['ds'] = pd.to_datetime(df_train['ds'], errors='coerce')
+        # Ensure 'y' is a Series
+        if not isinstance(df_train['y'], pd.Series):
+            raise ValueError("df_train['y'] is not a pandas Series.")
+        df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
+        df_train.dropna(inplace=True)
 
-    # Check if final df is valid
-    if df_train.empty or not pd.api.types.is_numeric_dtype(df_train['y']):
-        st.error("Data is invalid after cleaning. Cannot train model.")
-        st.stop()
-else:
-    st.error("Dataset missing required columns.")
+        # Validate data
+        if df_train.empty:
+            raise ValueError("Data is empty after cleaning.")
+        if df_train['y'].isna().all():
+            raise ValueError("All values in 'y' are invalid or non-numeric.")
+        if len(df_train) < 2:
+            raise ValueError("Not enough valid data points to train the model.")
+        if not pd.api.types.is_numeric_dtype(df_train['y']):
+            raise ValueError("Column 'y' contains non-numeric data after conversion.")
+    else:
+        raise ValueError("Dataset missing required columns: 'Date' or 'Close'.")
+except Exception as e:
+    st.error(f"Error preparing data for forecasting: {str(e)}")
     st.stop()
 
 # Cache Prophet model
@@ -153,19 +183,33 @@ def create_model():
     return Prophet()
 
 # Train and forecast
-m = create_model()
-m.fit(df_train)
-future = m.make_future_dataframe(periods=period)
-forecast = m.predict(future)
+try:
+    m = create_model()
+    m.fit(df_train)
+    future = m.make_future_dataframe(periods=period)
+    forecast = m.predict(future)
+except Exception as e:
+    st.error(f"Error training or forecasting with Prophet: {str(e)}")
+    st.stop()
 
 # Show forecast data
 st.subheader('Forecast data')
 st.write(forecast.tail())
 
+# Plot forecast
 st.write(f'📉 Forecast plot for {n_years} years')
-fig1 = plot_plotly(m, forecast)
-st.plotly_chart(fig1)
+try:
+    fig1 = plot_plotly(m, forecast)
+    st.plotly_chart(fig1)
+except Exception as e:
+    st.error(f"Error plotting forecast: {str(e)}")
+    st.stop()
 
+# Plot forecast components
 st.write("🔍 Forecast components")
-fig2 = m.plot_components(forecast)
-st.write(fig2)
+try:
+    fig2 = m.plot_components(forecast)
+    st.pyplot(fig2)
+except Exception as e:
+    st.error(f"Error plotting forecast components: {str(e)}")
+    st.stop()
