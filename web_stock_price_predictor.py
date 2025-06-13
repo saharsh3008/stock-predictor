@@ -134,9 +134,13 @@ plot_raw_data()
 # Prepare data for Prophet
 df_train = data[['Date', 'Close']].copy()
 df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
-df_train['ds'] = pd.to_datetime(df_train['ds'])
-df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
-df_train = df_train.dropna()
+if 'y' in df_train.columns:
+    df_train['ds'] = pd.to_datetime(df_train['ds'], errors='coerce')
+    df_train['y'] = pd.to_numeric(df_train['y'].squeeze(), errors='coerce')
+    df_train = df_train.dropna()
+else:
+    st.error("❌ Error: 'Close' column not found in the dataset. Cannot proceed.")
+    st.stop()
 
 # Cache for model
 @st.cache_resource
