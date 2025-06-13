@@ -1,81 +1,151 @@
+# import streamlit as st
+# import pandas as pd
+# import numpy as np
+# from keras.models import load_model
+# import matplotlib.pyplot as plt
+# import yfinance as yf
+
+# st.title("Stock Price Predictor App")
+
+# stock = st.text_input("Enter the Stock ID", "GOOG")
+
+# from datetime import datetime
+# end = datetime.now()
+# start = datetime(end.year-20,end.month,end.day)
+
+# google_data = yf.download(stock, start, end)
+
+# model = load_model("Latest_stock_price_model.keras")
+# st.subheader("Stock Data")
+# st.write(google_data)
+
+# splitting_len = int(len(google_data)*0.7)
+# x_test = pd.DataFrame(google_data.Close[splitting_len:])
+
+# def plot_graph(figsize, values, full_data, extra_data = 0, extra_dataset = None):
+#     fig = plt.figure(figsize=figsize)
+#     plt.plot(values,'Orange')
+#     plt.plot(full_data.Close, 'b')
+#     if extra_data:
+#         plt.plot(extra_dataset)
+#     return fig
+
+# st.subheader('Original Close Price and MA for 250 days')
+# google_data['MA_for_250_days'] = google_data.Close.rolling(250).mean()
+# st.pyplot(plot_graph((15,6), google_data['MA_for_250_days'],google_data,0))
+
+# st.subheader('Original Close Price and MA for 200 days')
+# google_data['MA_for_200_days'] = google_data.Close.rolling(200).mean()
+# st.pyplot(plot_graph((15,6), google_data['MA_for_200_days'],google_data,0))
+
+# st.subheader('Original Close Price and MA for 100 days')
+# google_data['MA_for_100_days'] = google_data.Close.rolling(100).mean()
+# st.pyplot(plot_graph((15,6), google_data['MA_for_100_days'],google_data,0))
+
+# st.subheader('Original Close Price and MA for 100 days and MA for 250 days')
+# st.pyplot(plot_graph((15,6), google_data['MA_for_100_days'],google_data,1,google_data['MA_for_250_days']))
+
+# from sklearn.preprocessing import MinMaxScaler
+
+# scaler = MinMaxScaler(feature_range=(0,1))
+# scaled_data = scaler.fit_transform(x_test[['Close']])
+
+# x_data = []
+# y_data = []
+
+# for i in range(100,len(scaled_data)):
+#     x_data.append(scaled_data[i-100:i])
+#     y_data.append(scaled_data[i])
+
+# x_data, y_data = np.array(x_data), np.array(y_data)
+
+# predictions = model.predict(x_data)
+
+# inv_pre = scaler.inverse_transform(predictions)
+# inv_y_test = scaler.inverse_transform(y_data)
+
+# ploting_data = pd.DataFrame(
+#  {
+#   'original_test_data': inv_y_test.reshape(-1),
+#     'predictions': inv_pre.reshape(-1)
+#  } ,
+#     index = google_data.index[splitting_len+100:]
+# )
+# st.subheader("Original values vs Predicted values")
+# st.write(ploting_data)
+
+# st.subheader('Original Close Price vs Predicted Close price')
+# fig = plt.figure(figsize=(15,6))
+# plt.plot(pd.concat([google_data.Close[:splitting_len+100],ploting_data], axis=0))
+# plt.legend(["Data- not used", "Original Test data", "Predicted Test data"])
+# st.pyplot(fig)
+
+
+
+
+
+# pip install streamlit fbprophet yfinance plotly
 import streamlit as st
-import pandas as pd
-import numpy as np
-from keras.models import load_model
-import matplotlib.pyplot as plt
+from datetime import date
+
 import yfinance as yf
+from fbprophet import Prophet
+from fbprophet.plot import plot_plotly
+from plotly import graph_objs as go
 
-st.title("Stock Price Predictor App")
+START = "2015-01-01"
+TODAY = date.today().strftime("%Y-%m-%d")
 
-stock = st.text_input("Enter the Stock ID", "GOOG")
+st.title('Stock Forecast App')
 
-from datetime import datetime
-end = datetime.now()
-start = datetime(end.year-20,end.month,end.day)
+stocks = ('GOOG', 'AAPL', 'MSFT', 'GME')
+selected_stock = st.selectbox('Select dataset for prediction', stocks)
 
-google_data = yf.download(stock, start, end)
+n_years = st.slider('Years of prediction:', 1, 4)
+period = n_years * 365
 
-model = load_model("Latest_stock_price_model.keras")
-st.subheader("Stock Data")
-st.write(google_data)
 
-splitting_len = int(len(google_data)*0.7)
-x_test = pd.DataFrame(google_data.Close[splitting_len:])
+@st.cache
+def load_data(ticker):
+    data = yf.download(ticker, START, TODAY)
+    data.reset_index(inplace=True)
+    return data
 
-def plot_graph(figsize, values, full_data, extra_data = 0, extra_dataset = None):
-    fig = plt.figure(figsize=figsize)
-    plt.plot(values,'Orange')
-    plt.plot(full_data.Close, 'b')
-    if extra_data:
-        plt.plot(extra_dataset)
-    return fig
+	
+data_load_state = st.text('Loading data...')
+data = load_data(selected_stock)
+data_load_state.text('Loading data... done!')
 
-st.subheader('Original Close Price and MA for 250 days')
-google_data['MA_for_250_days'] = google_data.Close.rolling(250).mean()
-st.pyplot(plot_graph((15,6), google_data['MA_for_250_days'],google_data,0))
+st.subheader('Raw data')
+st.write(data.tail())
 
-st.subheader('Original Close Price and MA for 200 days')
-google_data['MA_for_200_days'] = google_data.Close.rolling(200).mean()
-st.pyplot(plot_graph((15,6), google_data['MA_for_200_days'],google_data,0))
+# Plot raw data
+def plot_raw_data():
+	fig = go.Figure()
+	fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
+	fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
+	fig.layout.update(title_text='Time Series data with Rangeslider', xaxis_rangeslider_visible=True)
+	st.plotly_chart(fig)
+	
+plot_raw_data()
 
-st.subheader('Original Close Price and MA for 100 days')
-google_data['MA_for_100_days'] = google_data.Close.rolling(100).mean()
-st.pyplot(plot_graph((15,6), google_data['MA_for_100_days'],google_data,0))
+# Predict forecast with Prophet.
+df_train = data[['Date','Close']]
+df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
 
-st.subheader('Original Close Price and MA for 100 days and MA for 250 days')
-st.pyplot(plot_graph((15,6), google_data['MA_for_100_days'],google_data,1,google_data['MA_for_250_days']))
+m = Prophet()
+m.fit(df_train)
+future = m.make_future_dataframe(periods=period)
+forecast = m.predict(future)
 
-from sklearn.preprocessing import MinMaxScaler
+# Show and plot forecast
+st.subheader('Forecast data')
+st.write(forecast.tail())
+    
+st.write(f'Forecast plot for {n_years} years')
+fig1 = plot_plotly(m, forecast)
+st.plotly_chart(fig1)
 
-scaler = MinMaxScaler(feature_range=(0,1))
-scaled_data = scaler.fit_transform(x_test[['Close']])
-
-x_data = []
-y_data = []
-
-for i in range(100,len(scaled_data)):
-    x_data.append(scaled_data[i-100:i])
-    y_data.append(scaled_data[i])
-
-x_data, y_data = np.array(x_data), np.array(y_data)
-
-predictions = model.predict(x_data)
-
-inv_pre = scaler.inverse_transform(predictions)
-inv_y_test = scaler.inverse_transform(y_data)
-
-ploting_data = pd.DataFrame(
- {
-  'original_test_data': inv_y_test.reshape(-1),
-    'predictions': inv_pre.reshape(-1)
- } ,
-    index = google_data.index[splitting_len+100:]
-)
-st.subheader("Original values vs Predicted values")
-st.write(ploting_data)
-
-st.subheader('Original Close Price vs Predicted Close price')
-fig = plt.figure(figsize=(15,6))
-plt.plot(pd.concat([google_data.Close[:splitting_len+100],ploting_data], axis=0))
-plt.legend(["Data- not used", "Original Test data", "Predicted Test data"])
-st.pyplot(fig)
+st.write("Forecast components")
+fig2 = m.plot_components(forecast)
+st.write(fig2)
