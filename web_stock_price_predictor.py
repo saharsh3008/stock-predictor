@@ -105,7 +105,7 @@ n_years = st.slider('Years of prediction:', 1, 4)
 period = n_years * 365
 
 
-@st.cache
+@st.cache_data
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
     data.reset_index(inplace=True)
@@ -129,6 +129,10 @@ def plot_raw_data():
 	
 plot_raw_data()
 
+@st.cache_resource
+def create_model():
+    return Prophet()
+	
 # Predict forecast with Prophet.
 df_train = data[['Date','Close']]
 df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
