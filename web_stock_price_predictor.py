@@ -30,6 +30,9 @@ def load_data(ticker):
             raise ValueError("Unexpected data type returned from yfinance.")
         # Reset index to ensure 'Date' is a column
         data = data.reset_index()
+        # Flatten columns if MultiIndex
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = [col[0] if col[0] else col[1] for col in data.columns]
         required_columns = ['Date', 'Close']
         if not all(col in data.columns for col in required_columns):
             raise ValueError(f"Missing required columns: {required_columns}")
@@ -73,8 +76,11 @@ try:
         raise ValueError("Dataset missing required columns: 'Date' or 'Close'.")
 
     # Create df_train with a copy of the required columns
-    df_train = data[['Date', 'Close']].copy()
-    df_train = df_train.rename(columns={'Date': 'ds', 'Close': 'y'})
+    # Explicitly select 'Date' and 'Close' as Series to avoid MultiIndex issues
+    df_train = pd.DataFrame({
+        'ds': data['Date'],
+        'y': data['Close']
+    })
 
     # Debugging: Inspect df_train structure
     st.write("Debug: df_train columns:", df_train.columns.tolist())
