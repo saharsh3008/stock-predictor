@@ -36,6 +36,9 @@ def load_data(ticker):
         required_columns = ['Date', 'Close']
         if not all(col in data.columns for col in required_columns):
             raise ValueError(f"Missing required columns: {required_columns}")
+        # Debugging: Inspect raw data structure
+        st.write("Debug: Raw data columns:", data.columns.tolist())
+        st.write("Debug: Raw data head:", data.head())
         return data
     except Exception as e:
         st.error(f"Error loading data for {ticker}: {str(e)}")
@@ -76,7 +79,6 @@ try:
         raise ValueError("Dataset missing required columns: 'Date' or 'Close'.")
 
     # Create df_train with a copy of the required columns
-    # Explicitly select 'Date' and 'Close' as Series to avoid MultiIndex issues
     df_train = pd.DataFrame({
         'ds': data['Date'],
         'y': data['Close']
@@ -89,17 +91,15 @@ try:
 
     # Ensure 'ds' is datetime
     df_train['ds'] = pd.to_datetime(df_train['ds'], errors='coerce')
+    st.write("Debug: After converting 'ds' to datetime, df_train head:", df_train.head())
 
-    # Ensure 'y' is a Series and numeric
-    if not isinstance(df_train['y'], pd.Series):
-        df_train['y'] = df_train['y'].squeeze()  # Convert to Series if needed
-        if not isinstance(df_train['y'], pd.Series):
-            raise ValueError("Failed to convert df_train['y'] to a pandas Series.")
-
+    # Ensure 'y' is numeric
     df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
+    st.write("Debug: After converting 'y' to numeric, df_train head:", df_train.head())
 
     # Handle missing values
     df_train.dropna(inplace=True)
+    st.write("Debug: After dropping NA, df_train head:", df_train.head())
 
     # Validate data
     if df_train.empty:
