@@ -97,23 +97,23 @@ from plotly import graph_objs as go
 START = "2015-01-01"
 TODAY = date.today().strftime("%Y-%m-%d")
 
-# App Title
+# App title
 st.title('📈 Stock Forecast App')
 
-# Dropdown and Slider
+# UI controls
 stocks = ('GOOG', 'AAPL', 'MSFT', 'GME')
 selected_stock = st.selectbox('Select dataset for prediction', stocks)
 n_years = st.slider('Years of prediction:', 1, 4)
 period = n_years * 365
 
-# Cache for data loading
+# Cache stock data
 @st.cache_data
 def load_data(ticker):
     data = yf.download(ticker, START, TODAY)
     data.reset_index(inplace=True)
     return data
 
-# Load and preview data
+# Load and show data
 data_load_state = st.text('Loading data...')
 data = load_data(selected_stock)
 data_load_state.text('Loading data... done!')
@@ -121,7 +121,7 @@ data_load_state.text('Loading data... done!')
 st.subheader('Raw data')
 st.write(data.tail())
 
-# Plot raw data
+# Plotting raw data
 def plot_raw_data():
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="Stock Open"))
@@ -131,29 +131,34 @@ def plot_raw_data():
 
 plot_raw_data()
 
-# Prepare data for Prophet
-df_train = data[['Date', 'Close']].copy()
-df_train = df_train.rename(columns={"Date": "ds", "Close": "y"})
-if 'y' in df_train.columns:
+# ✅ Prepare data for Prophet with strict checks
+if 'Date' in data.columns and 'Close' in data.columns:
+    df_train = data[['Date', 'Close']].copy()
+    df_train.rename(columns={'Date': 'ds', 'Close': 'y'}, inplace=True)
     df_train['ds'] = pd.to_datetime(df_train['ds'], errors='coerce')
-    df_train['y'] = pd.to_numeric(df_train['y'].squeeze(), errors='coerce')
-    df_train = df_train.dropna()
+    df_train['y'] = pd.to_numeric(df_train['y'], errors='coerce')
+    df_train.dropna(inplace=True)
+
+    # Check if final df is valid
+    if df_train.empty or not pd.api.types.is_numeric_dtype(df_train['y']):
+        st.error("Data is invalid after cleaning. Cannot train model.")
+        st.stop()
 else:
-    st.error("❌ Error: 'Close' column not found in the dataset. Cannot proceed.")
+    st.error("Dataset missing required columns.")
     st.stop()
 
-# Cache for model
+# Cache Prophet model
 @st.cache_resource
 def create_model():
     return Prophet()
 
-# Fit model and forecast
+# Train and forecast
 m = create_model()
 m.fit(df_train)
 future = m.make_future_dataframe(periods=period)
 forecast = m.predict(future)
 
-# Forecast output
+# Show forecast data
 st.subheader('Forecast data')
 st.write(forecast.tail())
 
